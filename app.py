@@ -89,7 +89,7 @@ def build_ui():
         else "Monitoring: OFF -- add Langfuse keys to .env"
     )
 
-    with gr.Blocks(title="Job Search CrewAI") as demo:
+    with gr.Blocks(title="Job Search CrewAI", theme=gr.themes.Soft()) as demo:
 
         # ---- Header ----
         gr.Markdown(
@@ -300,5 +300,4 @@ if __name__ == "__main__":
         server_port=7860,
         share=False,
         show_error=True,
-        theme=gr.themes.Soft(),
     )
