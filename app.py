@@ -290,8 +290,11 @@ def build_ui():
 # ------------------------------------------------------------------ #
 # Entry point
 # ------------------------------------------------------------------ #
+# Build the demo at module level so HF Spaces can find it
+# (HF imports app.py as a module, not always via __main__)
+demo = build_ui()
+
 if __name__ == "__main__":
-    demo = build_ui()
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
