@@ -2,53 +2,50 @@
 """
 Pipeline Logger
 ---------------
-This module captures every step of the CrewAI workflow and formats it
-as readable log messages for display in the Gradio UI.
+Captures CrewAI execution events and formats them as clean,
+readable markdown for display in the Gradio Pipeline tab.
 
-WHY THIS MATTERS for the assignment:
-  The pipeline log is what "shows" the examiner that:
-    - Multiple agents are collaborating (each agent appears in the log)
-    - Tools are being used (tool calls are recorded)
-    - Fallback logic is working (errors and retries are logged)
-    - The workflow is sequential and structured (tasks appear in order)
-
-HOW IT WORKS:
-  CrewAI Crew accepts two optional callbacks:
-    - step_callback: fires after every agent action (thinking, tool call, response)
-    - task_callback: fires after every task completes
-
-  We pass our logger's methods as these callbacks, so every internal event
-  gets recorded. We also capture stdout so the raw verbose output is saved.
-
-  The formatted log is then shown in the Gradio "Pipeline" tab.
+The core challenge: CrewAI's verbose output uses ANSI terminal color codes
+(e.g. [36m, [0m, [1;33m) which look great in a terminal but are
+unreadable garbage in a web UI. This module strips all ANSI codes and
+rebuilds the log as clean structured markdown.
 """
 
 import io
+import re
 import sys
 from datetime import datetime
+
+
+# Regex that matches ALL ANSI escape sequences (colors, bold, cursor moves, etc.)
+ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+
+def strip_ansi(text: str) -> str:
+    """Remove all ANSI escape codes from a string."""
+    return ANSI_ESCAPE.sub('', text)
 
 
 class PipelineLogger:
     """
     Records all agent events during a crew run and formats them
-    for display in the UI.
+    for clean display in the Gradio Pipeline tab.
     """
 
     def __init__(self):
-        self.events = []           # structured event records
-        self._stdout_buffer = None # captures raw verbose output
+        self.events = []
+        self._stdout_buffer = None
         self._old_stdout = None
 
     def reset(self):
-        """Clear logs from previous run. Called at the start of each new search."""
+        """Clear logs from the previous run. Called at the start of each search."""
         self.events = []
         self._stdout_buffer = io.StringIO()
 
     def start_capture(self):
-        """Redirect stdout so CrewAI's verbose print statements are captured."""
+        """Redirect stdout through a Tee so output goes to terminal AND our buffer."""
         self._stdout_buffer = io.StringIO()
         self._old_stdout = sys.stdout
-        # We use a Tee so output goes to BOTH the buffer AND the real terminal
         sys.stdout = _Tee(self._old_stdout, self._stdout_buffer)
 
     def stop_capture(self):
@@ -60,106 +57,155 @@ class PipelineLogger:
     # ---- CrewAI Callbacks ---- #
 
     def on_step(self, step_output):
-        """
-        Called by CrewAI after every agent action.
-        An 'action' could be: thinking, calling a tool, or producing a response.
-        """
+        """Called by CrewAI after every agent thought/action/tool call."""
         self.events.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "type": "step",
-            "content": str(step_output)[:500],  # cap length
+            "content": strip_ansi(str(step_output))[:500],
         })
 
     def on_task_complete(self, task_output):
-        """
-        Called by CrewAI after each task finishes.
-        This tells us an agent has finished its assigned work.
-        """
+        """Called by CrewAI after each of the 4 tasks finishes."""
         self.events.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "type": "task_complete",
-            "content": str(task_output)[:300],
+            "content": strip_ansi(str(task_output))[:400],
         })
 
-    # ---- Formatting for UI ---- #
+    # ---- Format for Gradio UI ---- #
 
     def format_for_display(self) -> str:
         """
-        Formats the captured stdout into a clean, readable markdown log.
-        Highlights agent names, tool calls, and errors with labels.
+        Strips ANSI codes from captured output, then rebuilds it as
+        clean structured markdown grouped by agent/task/tool.
         """
         raw = self._stdout_buffer.getvalue() if self._stdout_buffer else ""
+        clean = strip_ansi(raw)
 
-        if not raw.strip():
-            return "_No pipeline log captured. Make sure verbose=True in crew.py_"
+        if not clean.strip():
+            return "_No pipeline log captured yet. Run a job search first._"
 
-        lines = raw.split("\n")
-        formatted = []
-        formatted.append("## Pipeline Execution Log\n")
-        formatted.append("---\n")
+        lines = [l.rstrip() for l in clean.split("\n") if l.strip()]
+        sections = []
+        current_section = None
+        current_lines = []
+
+        def flush():
+            if current_section and current_lines:
+                sections.append((current_section, list(current_lines)))
 
         for line in lines:
-            line = line.rstrip()
-            if not line:
-                continue
+            # --- Detect section headers based on CrewAI verbose output patterns ---
 
-            # Tag lines based on content for visual structure
-            if any(k in line for k in ["Working Agent:", "Agent:", ">> Agent"]):
-                formatted.append(f"\n### {line}")
+            if "Crew Execution Started" in line:
+                flush(); current_section = "CREW_START"; current_lines = []
 
-            elif any(k in line for k in ["Task:", "## Task", "Task output:"]):
-                formatted.append(f"\n**{line}**")
+            elif "Task Started" in line:
+                flush(); current_section = "TASK_START"; current_lines = []
 
-            elif any(k in line for k in ["Using tool:", "Action:", "Action Input:", "Tool Input:"]):
-                formatted.append(f"\n> **TOOL CALL:** `{line}`")
+            elif "Task Completed" in line or "Task output:" in line:
+                flush(); current_section = "TASK_DONE"; current_lines = []
 
-            elif any(k in line for k in ["Observation:", "Tool Output:", "Result:"]):
-                formatted.append(f"> **TOOL OUTPUT:** {line}")
+            elif "Working Agent:" in line or "Agent:" in line and "Action" not in line:
+                flush(); current_section = "AGENT"; current_lines = [line]
 
-            elif any(k in line for k in ["Final Answer:", "Final answer:"]):
-                formatted.append(f"\n**FINAL ANSWER:** {line}")
+            elif "Using tool:" in line or "Action:" in line:
+                flush(); current_section = "TOOL_CALL"; current_lines = [line]
 
-            elif any(k in line for k in ["ERROR", "Error", "FALLBACK", "failed", "Failed"]):
-                formatted.append(f"\n> **[ERROR/FALLBACK]** {line}")
+            elif "Action Input:" in line or "Tool Input:" in line:
+                if current_section != "TOOL_CALL":
+                    flush(); current_section = "TOOL_CALL"; current_lines = []
+                current_lines.append(line)
 
-            elif any(k in line for k in ["Retrying", "retry", "attempt"]):
-                formatted.append(f"> **[RETRY]** {line}")
+            elif "Observation:" in line or "Tool Output:" in line:
+                flush(); current_section = "TOOL_OUTPUT"; current_lines = []
 
-            elif line.startswith("=") or line.startswith("-"):
-                formatted.append(f"\n{line}")
+            elif "Final Answer:" in line or "Final answer:" in line:
+                flush(); current_section = "FINAL_ANSWER"; current_lines = [line]
+
+            elif any(k in line for k in ["Error", "ERROR", "FALLBACK", "Retrying", "failed"]):
+                flush(); current_section = "ERROR"; current_lines = [line]
+
+            elif "Crew Execution Completed" in line or "Crew execution completed" in line:
+                flush(); current_section = "CREW_END"; current_lines = []
 
             else:
-                formatted.append(line)
+                if current_section:
+                    current_lines.append(line)
 
-        # Append structured callback events
-        if self.events:
-            formatted.append("\n\n---\n## Task Completion Summary\n")
-            for ev in self.events:
-                if ev["type"] == "task_complete":
-                    formatted.append(
-                        f"- **[{ev['time']}] Task completed:** "
-                        f"{ev['content'][:150]}..."
-                    )
+        flush()
 
-        return "\n".join(formatted)
+        # --- Render sections as clean markdown ---
+        md = ["## Pipeline Execution Log\n", "---\n"]
 
-    def get_summary(self) -> str:
-        """
-        Returns a short summary of what ran -- shown at the top of the pipeline tab.
-        """
-        task_count = sum(1 for e in self.events if e["type"] == "task_complete")
-        step_count = sum(1 for e in self.events if e["type"] == "step")
-        return (
-            f"**Run completed:** {task_count} tasks finished, "
-            f"{step_count} agent steps recorded."
-        )
+        for (stype, slines) in sections:
+            body = "\n".join(l for l in slines if l.strip())
+
+            if stype == "CREW_START":
+                md.append("\n### Crew Started\n")
+
+            elif stype == "TASK_START":
+                # Extract task name from the lines
+                name_line = next((l for l in slines if "Name:" in l or "Search" in l
+                                  or "Research" in l or "Analyse" in l or "Match" in l), "")
+                label = name_line.replace("Name:", "").strip()[:120] if name_line else "New Task"
+                md.append(f"\n---\n\n#### Task: {label}\n")
+
+            elif stype == "AGENT":
+                agent_name = next((l for l in slines if l.strip()), "Agent")
+                agent_name = agent_name.replace("Working Agent:", "").strip()
+                md.append(f"\n**Agent Running:** `{agent_name}`\n")
+
+            elif stype == "TOOL_CALL":
+                tool_line = next((l for l in slines if "Action" in l or "Using tool" in l), "")
+                tool_name = tool_line.replace("Action:", "").replace("Using tool:", "").strip()
+                input_lines = [l for l in slines if "Input" in l or "Action" not in l]
+                input_text = " ".join(input_lines).replace("Action Input:", "").replace("Tool Input:", "").strip()
+                md.append(f"\n> **Tool Called:** `{tool_name}`\n")
+                if input_text:
+                    md.append(f"> **Input:** {input_text[:200]}\n")
+
+            elif stype == "TOOL_OUTPUT":
+                output_text = body.replace("Observation:", "").replace("Tool Output:", "").strip()
+                if output_text:
+                    md.append(f"> **Tool Output:**\n> {output_text[:400]}\n")
+
+            elif stype == "FINAL_ANSWER":
+                answer = body.replace("Final Answer:", "").replace("Final answer:", "").strip()
+                md.append(f"\n**Task Result (Summary):** {answer[:300]}...\n")
+
+            elif stype == "TASK_DONE":
+                md.append("\n**Task completed.**\n")
+
+            elif stype == "ERROR":
+                md.append(f"\n> **[FALLBACK/ERROR]** {body}\n")
+
+            elif stype == "CREW_END":
+                md.append("\n---\n\n### Crew Finished\n")
+
+        # --- Append task completion events from callbacks ---
+        task_events = [e for e in self.events if e["type"] == "task_complete"]
+        if task_events:
+            md.append("\n---\n\n## Task Completion Timeline\n")
+            agent_names = [
+                "Job Researcher",
+                "Salary Analyst",
+                "Job Analyst",
+                "Career Advisor",
+            ]
+            for i, ev in enumerate(task_events):
+                agent = agent_names[i] if i < len(agent_names) else f"Agent {i+1}"
+                preview = ev["content"][:200].replace("\n", " ").strip()
+                md.append(f"- **[{ev['time']}] {agent} finished:** {preview}...\n")
+
+        return "\n".join(md)
 
 
 class _Tee:
     """
-    A helper that writes to TWO streams at once.
-    Used so stdout goes to BOTH the terminal (so you see it live)
-    AND the buffer (so we can display it in the UI).
+    Writes to two streams simultaneously.
+    Stdout goes to BOTH the real terminal (so you see live output)
+    AND the buffer (so we can display it in the Gradio UI).
     """
     def __init__(self, stream1, stream2):
         self.stream1 = stream1
@@ -177,5 +223,5 @@ class _Tee:
         return self.stream1.fileno()
 
 
-# Shared singleton -- the same logger instance is used by crew.py and app.py
+# Shared singleton -- used by both crew.py and app.py
 pipeline_logger = PipelineLogger()
