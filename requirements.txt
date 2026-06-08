@@ -3,6 +3,7 @@ crewai-tools>=0.0.1
 langfuse>=4.0.0
 litellm>=1.0.0
 openai>=1.0.0
-gradio==4.44.1
+# gradio is managed by HF Spaces via sdk_version in README frontmatter
+# locally the venv uses whatever version pip installed (currently 6.x)
 requests>=2.31.0
 python-dotenv>=1.0.0
