@@ -3,11 +3,8 @@ title: Job Search CrewAI Assistant
 emoji: 🤖
 colorFrom: blue
 colorTo: indigo
-sdk: gradio
-sdk_version: "5.29.0"
-app_file: app.py
+sdk: docker
 pinned: false
-python_version: "3.11"
 short_description: Multi-agent job search assistant built with CrewAI
 ---
 
