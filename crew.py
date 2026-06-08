@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Crew Assembly
 -------------
@@ -5,17 +6,18 @@ This file is the HEART of the application.
 It brings together agents + tasks and kicks off the workflow.
 
 Think of it as the "project manager" that:
-  1. Hires the agents (imports from agents.py)
-  2. Assigns the work (imports from tasks.py)
-  3. Decides the process (sequential vs hierarchical)
-  4. Starts the crew and returns the final result
+  1. Activates Langfuse monitoring
+  2. Hires the agents (imports from agents.py)
+  3. Assigns the work (imports from tasks.py)
+  4. Decides the process (sequential vs hierarchical)
+  5. Starts the crew and returns the final result
 
 PROCESS TYPES in CrewAI:
-  - Process.sequential  → Tasks run ONE AFTER ANOTHER (like an assembly line)
-  - Process.hierarchical → A manager agent decides who does what (more complex)
+  - Process.sequential  -> Tasks run ONE AFTER ANOTHER (like an assembly line)
+  - Process.hierarchical -> A manager agent decides who does what (more complex)
 
-We use SEQUENTIAL here because our workflow has a clear order:
-  Research → [Salary + Summarize in parallel] → Match & Advise
+We use SEQUENTIAL because our workflow has a clear order:
+  Research -> [Salary + Summarize] -> Match & Advise
 """
 
 import os
@@ -23,13 +25,17 @@ from datetime import datetime
 from crewai import Crew, Process
 from agents import create_agents
 from tasks import create_tasks
-from monitoring.langfuse_config import setup_langfuse
+from monitoring.langfuse_config import setup_langfuse, get_observe_decorator
 from fallback.fallback_handler import safe_crew_run
 
 
 def run_job_search_crew(user_inputs: dict) -> str:
     """
     Main entry point. Builds and runs the crew.
+
+    The @observe decorator (from Langfuse) wraps this entire function
+    so the whole run appears as ONE trace in the Langfuse dashboard,
+    with each LLM call and tool call nested inside it.
 
     Args:
         user_inputs: dict with:
@@ -42,36 +48,67 @@ def run_job_search_crew(user_inputs: dict) -> str:
         Final report as a string.
     """
 
-    # Step 1: Set up Langfuse monitoring (tracks everything that happens)
-    setup_langfuse()
+    # Step 1: Activate Langfuse monitoring
+    # This enables LiteLLM -> Langfuse callbacks so every LLM call is traced
+    monitoring_active = setup_langfuse()
 
-    # Step 2: Create all agents
+    # Step 2: Wrap with Langfuse @observe if monitoring is active
+    # The observe decorator creates a parent trace in Langfuse that all
+    # nested LLM calls and tool calls appear under
+    if monitoring_active:
+        result = _run_crew_observed(user_inputs)
+    else:
+        result = _run_crew(user_inputs)
+
+    # Step 3: Auto-save the result to the outputs/ folder
+    _save_result(result, user_inputs)
+
+    return result
+
+
+def _run_crew_observed(user_inputs: dict) -> str:
+    """
+    Runs the crew with Langfuse @observe tracing active.
+    This creates a named parent trace in Langfuse so you can find it easily.
+
+    In Langfuse v4, @observe is imported directly from langfuse (not langfuse.decorators).
+    get_observe_decorator() handles the correct import path.
+    """
+    observe = get_observe_decorator()
+
+    @observe(name="job-search-crew-run")
+    def _inner(inputs):
+        return _run_crew(inputs)
+
+    return _inner(user_inputs)
+
+
+def _run_crew(user_inputs: dict) -> str:
+    """
+    Core crew execution -- builds agents, tasks, and runs the workflow.
+    """
+    # Create all agents
     agents = create_agents()
 
-    # Step 3: Create all tasks, injecting the user's inputs
+    # Create all tasks, injecting the user's inputs
     tasks = create_tasks(agents, user_inputs)
 
-    # Step 4: Assemble the Crew
+    # Assemble the Crew
     crew = Crew(
         agents=list(agents),
         tasks=tasks,
         process=Process.sequential,
         # sequential means:
-        #   Task 1 runs → Task 2 runs → Task 3 runs → Task 4 runs
+        #   Task 1 runs -> Task 2 runs -> Task 3 runs -> Task 4 runs
         #   Each task can see previous tasks' outputs via context=[...]
         verbose=True,
         # verbose=True prints a live log of what each agent is thinking
-        # and doing — great for learning and debugging!
+        # and doing -- great for learning and debugging!
     )
 
-    # Step 5: Run the crew with fallback protection
+    # Run the crew with fallback protection
     # (if something crashes, fallback_handler catches it gracefully)
-    result = safe_crew_run(crew, user_inputs)
-
-    # Step 6: Auto-save the result to the outputs/ folder
-    _save_result(result, user_inputs)
-
-    return result
+    return safe_crew_run(crew, user_inputs)
 
 
 def _save_result(result: str, user_inputs: dict):
