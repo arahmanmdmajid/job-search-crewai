@@ -1,0 +1,63 @@
+========================================================
+  SAMPLE INPUT -- Job Search CrewAI Assistant
+  Use this as a test case when demoing the application
+========================================================
+
+JOB TITLE:
+  Data Scientist
+
+LOCATION:
+  Remote
+
+CANDIDATE PROFILE:
+  I have 3 years of experience as a Data Scientist with a focus on machine learning
+  and predictive modelling. I hold a BSc in Computer Science from Universiti Malaya.
+
+  Technical skills:
+  - Python (pandas, numpy, scikit-learn, matplotlib)
+  - Machine Learning: supervised/unsupervised models, feature engineering
+  - SQL and database querying (PostgreSQL, MySQL)
+  - Data visualisation: Tableau, Power BI
+  - Basic NLP using spaCy and NLTK
+  - Git and version control
+
+  Projects:
+  - Built a customer churn prediction model for a telco company (92% accuracy)
+  - Developed a sales forecasting pipeline using ARIMA and XGBoost
+  - Created an NLP sentiment analyser for social media data
+
+  I am looking for a remote role with growth opportunities in AI/ML.
+
+JOB DESCRIPTION (paste from a real job posting):
+  Data Scientist -- Remote (Global)
+  Company: TechCorp Analytics
+
+  We are looking for a Data Scientist to join our growing analytics team.
+
+  Responsibilities:
+  - Build and deploy machine learning models for business problems
+  - Work with large datasets to derive actionable insights
+  - Collaborate with product and engineering teams
+  - Present findings to non-technical stakeholders
+
+  Requirements:
+  - 2+ years of experience in data science or machine learning
+  - Proficiency in Python and SQL
+  - Experience with scikit-learn, TensorFlow or PyTorch
+  - Strong communication skills
+  - Bachelor's degree in a quantitative field
+
+  Nice to have:
+  - Experience with cloud platforms (AWS, GCP, Azure)
+  - Knowledge of MLOps and model deployment
+  - Experience with NLP or computer vision
+
+  Salary: $70,000 - $100,000 USD per year (depending on experience)
+
+========================================================
+  HOW TO USE THIS FILE:
+  Copy the CANDIDATE PROFILE into the "Your Skills & Experience" box
+  Copy the JOB DESCRIPTION into the "Job Description to Analyse" box
+  Set Job Title to "Data Scientist" and Location to "Remote"
+  Click "Run Job Search"
+========================================================

@@ -18,6 +18,8 @@ We use SEQUENTIAL here because our workflow has a clear order:
   Research → [Salary + Summarize in parallel] → Match & Advise
 """
 
+import os
+from datetime import datetime
 from crewai import Crew, Process
 from agents import create_agents
 from tasks import create_tasks
@@ -66,4 +68,36 @@ def run_job_search_crew(user_inputs: dict) -> str:
     # (if something crashes, fallback_handler catches it gracefully)
     result = safe_crew_run(crew, user_inputs)
 
+    # Step 6: Auto-save the result to the outputs/ folder
+    _save_result(result, user_inputs)
+
     return result
+
+
+def _save_result(result: str, user_inputs: dict):
+    """
+    Saves the crew's output to the outputs/ folder as a markdown file.
+    Filename includes the job title and a timestamp so results don't overwrite each other.
+    """
+    try:
+        os.makedirs("outputs", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        job_title_slug = user_inputs.get("job_title", "result").replace(" ", "_").lower()
+        filename = f"outputs/{job_title_slug}_{timestamp}.md"
+
+        header = (
+            f"# Job Search Report\n\n"
+            f"- **Job Title:** {user_inputs.get('job_title')}\n"
+            f"- **Location:** {user_inputs.get('location')}\n"
+            f"- **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"---\n\n"
+        )
+
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(header + result)
+
+        print(f"\nResult saved to: {filename}")
+
+    except Exception as e:
+        # Non-critical -- don't crash the app if saving fails
+        print(f"[WARN] Could not save result to file: {e}")

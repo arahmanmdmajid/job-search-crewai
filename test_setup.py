@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Setup Verification Script
 --------------------------
@@ -20,14 +21,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 print("=" * 55)
-print("  Job Search CrewAI — Setup Verification")
+print("  Job Search CrewAI - Setup Verification")
 print("=" * 55)
 
 errors = []
 warnings = []
 
 # ---- 1. Check packages ---- #
-print("\n📦 Checking installed packages...")
+print("\n[PACKAGES] Checking installed packages...")
 
 packages = {
     "crewai": "crewai",
@@ -41,13 +42,13 @@ packages = {
 for import_name, package_name in packages.items():
     try:
         __import__(import_name)
-        print(f"  ✅ {package_name}")
+        print(f"  [OK] {package_name}")
     except ImportError:
-        print(f"  ❌ {package_name} — run: pip install {package_name}")
+        print(f"  [MISSING] {package_name} -- run: pip install {package_name}")
         errors.append(f"Missing package: {package_name}")
 
 # ---- 2. Check API keys ---- #
-print("\n🔑 Checking API keys in .env...")
+print("\n[API KEYS] Checking API keys in .env...")
 
 openai_key = os.getenv("OPENAI_API_KEY", "")
 tavily_key = os.getenv("TAVILY_API_KEY", "")
@@ -55,30 +56,30 @@ langfuse_secret = os.getenv("LANGFUSE_SECRET_KEY", "")
 langfuse_public = os.getenv("LANGFUSE_PUBLIC_KEY", "")
 
 if openai_key and openai_key != "your_openai_api_key_here":
-    print(f"  ✅ OPENAI_API_KEY found (ends in ...{openai_key[-4:]})")
+    print(f"  [OK] OPENAI_API_KEY found (ends in ...{openai_key[-4:]})")
 else:
-    print("  ❌ OPENAI_API_KEY missing or not set")
+    print("  [MISSING] OPENAI_API_KEY not set")
     errors.append("OPENAI_API_KEY not configured")
 
 if tavily_key and tavily_key != "your_tavily_api_key_here":
-    print(f"  ✅ TAVILY_API_KEY found (ends in ...{tavily_key[-4:]})")
+    print(f"  [OK] TAVILY_API_KEY found (ends in ...{tavily_key[-4:]})")
 else:
-    print("  ❌ TAVILY_API_KEY missing or not set")
+    print("  [MISSING] TAVILY_API_KEY not set")
     errors.append("TAVILY_API_KEY not configured")
 
 if langfuse_secret and langfuse_secret != "your_langfuse_secret_key_here":
-    print(f"  ✅ LANGFUSE_SECRET_KEY found")
+    print("  [OK] LANGFUSE_SECRET_KEY found")
 else:
-    print("  ⚠️  LANGFUSE_SECRET_KEY not set (monitoring will be disabled)")
+    print("  [WARN] LANGFUSE_SECRET_KEY not set (monitoring will be disabled)")
     warnings.append("Langfuse monitoring not configured")
 
 if langfuse_public and langfuse_public != "your_langfuse_public_key_here":
-    print(f"  ✅ LANGFUSE_PUBLIC_KEY found")
+    print("  [OK] LANGFUSE_PUBLIC_KEY found")
 else:
-    print("  ⚠️  LANGFUSE_PUBLIC_KEY not set (monitoring will be disabled)")
+    print("  [WARN] LANGFUSE_PUBLIC_KEY not set (monitoring will be disabled)")
 
 # ---- 3. Test Tavily connectivity ---- #
-print("\n🌐 Testing Tavily API connection...")
+print("\n[TAVILY] Testing Tavily API connection...")
 try:
     import requests
     if tavily_key and tavily_key != "your_tavily_api_key_here":
@@ -88,49 +89,49 @@ try:
             timeout=8,
         )
         if resp.status_code == 200:
-            print("  ✅ Tavily API is reachable and key is valid")
+            print("  [OK] Tavily API is reachable and key is valid")
         elif resp.status_code == 401:
-            print("  ❌ Tavily API key is invalid (401 Unauthorized)")
+            print("  [FAIL] Tavily API key is invalid (401 Unauthorized)")
             errors.append("Invalid TAVILY_API_KEY")
         else:
-            print(f"  ⚠️  Tavily returned status {resp.status_code}")
+            print(f"  [WARN] Tavily returned status {resp.status_code}")
             warnings.append(f"Tavily status: {resp.status_code}")
     else:
-        print("  ⏭️  Skipped (no Tavily key configured)")
+        print("  [SKIP] No Tavily key configured")
 except Exception as e:
-    print(f"  ⚠️  Could not reach Tavily: {e}")
+    print(f"  [WARN] Could not reach Tavily: {e}")
     warnings.append("Tavily unreachable")
 
 # ---- 4. Test OpenAI connectivity ---- #
-print("\n🤖 Testing OpenAI API connection...")
+print("\n[OPENAI] Testing OpenAI API connection...")
 try:
     from openai import OpenAI
     if openai_key and openai_key != "your_openai_api_key_here":
         client = OpenAI(api_key=openai_key)
         resp = client.models.list()
-        print("  ✅ OpenAI API is reachable and key is valid")
+        print("  [OK] OpenAI API is reachable and key is valid")
     else:
-        print("  ⏭️  Skipped (no OpenAI key configured)")
+        print("  [SKIP] No OpenAI key configured")
 except Exception as e:
-    print(f"  ❌ OpenAI connection failed: {str(e)[:100]}")
+    print(f"  [FAIL] OpenAI connection failed: {str(e)[:100]}")
     errors.append("OpenAI API connection failed")
 
 # ---- Summary ---- #
 print("\n" + "=" * 55)
 if errors:
-    print(f"❌ {len(errors)} error(s) found — fix these before running app.py:")
+    print(f"ERRORS: {len(errors)} issue(s) found -- fix before running app.py:")
     for e in errors:
-        print(f"   • {e}")
+        print(f"   - {e}")
 else:
-    print("✅ All critical checks passed!")
+    print("ALL CHECKS PASSED!")
 
 if warnings:
-    print(f"\n⚠️  {len(warnings)} warning(s) — optional but recommended:")
+    print(f"\nWARNINGS: {len(warnings)} optional item(s):")
     for w in warnings:
-        print(f"   • {w}")
+        print(f"   - {w}")
 
 if not errors:
-    print("\n🚀 Ready to run! Start the app with:")
+    print("\nReady to run! Start the app with:")
     print("   python app.py")
     print("   Then open: http://localhost:7860")
 

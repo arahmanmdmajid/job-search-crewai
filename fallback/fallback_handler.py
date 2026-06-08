@@ -38,7 +38,7 @@ def safe_crew_run(crew, user_inputs: dict, max_retries: int = 2) -> str:
     for attempt in range(1, max_retries + 1):
         try:
             print(f"\n{'='*50}")
-            print(f"🚀 Starting crew (attempt {attempt}/{max_retries})...")
+            print(f"Starting crew (attempt {attempt}/{max_retries})...")
             print(f"{'='*50}\n")
 
             result = crew.kickoff()
@@ -52,22 +52,22 @@ def safe_crew_run(crew, user_inputs: dict, max_retries: int = 2) -> str:
                     "This may indicate an agent failed silently."
                 )
 
-            print(f"\n✅ Crew completed successfully on attempt {attempt}.")
+            print(f"\nCrew completed successfully on attempt {attempt}.")
             return output
 
         except ValueError as e:
             # Empty output — retry immediately
             last_error = str(e)
-            print(f"\n⚠️  Attempt {attempt} returned empty output: {last_error}")
+            print(f"\n[WARN] Attempt {attempt} returned empty output: {last_error}")
 
         except Exception as e:
             last_error = str(e)
             error_trace = traceback.format_exc()
-            print(f"\n❌ Attempt {attempt} failed with error:\n{error_trace}")
+            print(f"\n[ERROR] Attempt {attempt} failed with error:\n{error_trace}")
 
             if attempt < max_retries:
                 wait_seconds = attempt * 5  # Wait 5s, then 10s before retrying
-                print(f"⏳ Retrying in {wait_seconds} seconds...\n")
+                print(f"Retrying in {wait_seconds} seconds...\n")
                 time.sleep(wait_seconds)
 
     # All retries exhausted — return a friendly fallback message

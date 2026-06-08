@@ -7,8 +7,9 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Output files
-outputs/
+# Output files (ignore generated results, but keep the sample)
+outputs/*.md
+!outputs/sample_result.md
 
 # IDE
 .vscode/

@@ -35,22 +35,22 @@ def setup_langfuse():
     CrewAI picks up these env vars automatically:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_PUBLIC_KEY
-      - LANGFUSE_HOST
+      - LANGFUSE_BASE_URL (or LANGFUSE_HOST)
     """
 
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
-    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    host = os.getenv("LANGFUSE_BASE_URL", os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"))
 
     if secret_key and public_key:
         # Keys are set — CrewAI will automatically send traces
-        print(f"📊 Langfuse monitoring ENABLED")
+        print(f"[Langfuse] Monitoring ENABLED")
         print(f"   Dashboard: {host}")
         print(f"   Traces will appear in your Langfuse project after the run.\n")
         return True
     else:
         # Keys are missing — monitoring will be skipped but app still works
-        print("⚠️  Langfuse monitoring DISABLED")
+        print("[Langfuse] Monitoring DISABLED")
         print("   Set LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY in your .env")
         print("   to enable observability. Get free keys at cloud.langfuse.com\n")
         return False
@@ -65,6 +65,6 @@ def get_monitoring_status() -> dict:
         "enabled": bool(
             os.getenv("LANGFUSE_SECRET_KEY") and os.getenv("LANGFUSE_PUBLIC_KEY")
         ),
-        "host": os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+        "host": os.getenv("LANGFUSE_BASE_URL", os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")),
         "project": "job-search-crewai",
     }
