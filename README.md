@@ -1,3 +1,15 @@
+---
+title: Job Search CrewAI Assistant
+emoji: 🤖
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: "5.0.0"
+app_file: app.py
+pinned: false
+short_description: Multi-agent job search assistant built with CrewAI
+---
+
 # Job Search CrewAI Assistant
 
 An AI-powered job search assistant built with **CrewAI**, featuring a multi-agent workflow that finds jobs, researches salaries, summarizes job descriptions, and scores candidate fit -- all with observability via Langfuse.
@@ -37,6 +49,7 @@ job-search-crewai/
 |
 +-- monitoring/
 |   +-- langfuse_config.py   <- Langfuse observability setup
+|   +-- pipeline_logger.py   <- Live pipeline log with timing bars
 |
 +-- data/
 |   +-- sample_input.txt     <- Sample inputs for testing
@@ -112,8 +125,6 @@ Task 3: Job Analyst summarizes job description    [summarizer_tool]
 Task 4: Career Advisor scores fit + final report  [resume_matcher_tool]
 ```
 
-Tasks 2 and 3 run independently before being combined into Task 4's context.
-
 ---
 
 ## Fallback Handling
@@ -128,15 +139,7 @@ Fallbacks are implemented at two levels:
 **Crew level** (`fallback/fallback_handler.py`):
 - The crew is retried up to 2 times on failure
 - Retries include a wait period (5s, then 10s) to handle rate limits
-- After all retries fail, a structured fallback message is returned with:
-  - What was being attempted
-  - What likely went wrong
-  - Manual alternatives for the user
-
-**Tested failure scenarios:**
-- Invalid API key (Tavily returns 401, handled gracefully)
-- Empty job description input (validated before tool is called)
-- Short/missing candidate profile (validated in Gradio UI before crew runs)
+- After all retries fail, a structured fallback message is returned
 
 ---
 
@@ -149,87 +152,48 @@ This project uses [Langfuse](https://cloud.langfuse.com) for full observability.
 - Every LLM call (prompt, response, token count)
 - Every tool call (tool name, input, output)
 - Errors and failed steps
-- Total latency per run
-- Cost estimation (via OpenAI token tracking)
-
-**How it works:**
-CrewAI has built-in Langfuse integration. When `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set in `.env`, all traces are sent automatically -- no manual instrumentation needed.
-
-View traces at: [cloud.langfuse.com](https://cloud.langfuse.com)
+- Total latency and cost estimation
 
 ---
 
 ## MCP (Model Context Protocol) Awareness
 
-This project does not implement MCP but the architecture would benefit from it in the following ways:
-
 **Tools that could become MCP servers:**
-- **Job Search Tool:** The Tavily integration could be exposed as an MCP server so any future agent or application can call it without reimplementing the API client
-- **Salary Research Tool:** The Remotive API wrapper could become a standardised MCP data source, shareable across career-related projects
-- **Resume Matcher:** The custom scoring tool could be deployed as an MCP server, making it reusable by any agent in any framework
+- **Job Search Tool:** Exposed as an MCP server so any agent can call it without reimplementing the API client
+- **Salary Research Tool:** A standardised MCP data source shareable across career-related projects
+- **Resume Matcher:** Deployed as an MCP server, reusable by any agent in any framework
 
-**How MCP would improve this project:**
-- Tool definitions would be standardised (no duplicating `@tool` wrappers across projects)
-- New agents could dynamically discover and call tools at runtime
-- The crew could be extended with new tools from any MCP registry without code changes
-- The Resume Matcher could serve multiple applications simultaneously as a microservice
+**Benefits of MCP here:**
+- Tool definitions standardised -- no duplicating `@tool` wrappers
+- New agents can dynamically discover and call tools at runtime
+- Resume Matcher becomes a reusable microservice for any career app
 
 ---
 
-## Setup Instructions
+## Setup (Local)
 
-### 1. Clone the repository
 ```bash
 git clone https://github.com/arahmanmdmajid/job-search-crewai.git
 cd job-search-crewai
-```
-
-### 2. Create and activate a virtual environment
-```bash
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Mac/Linux
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-```bash
+venv\Scripts\activate        # Windows
 pip install -r requirements.txt
+cp .env.example .env         # fill in your API keys
+python test_setup.py         # verify everything works
+python app.py                # open http://localhost:7860
 ```
 
-### 4. Configure API keys
-```bash
-cp .env.example .env
-```
-Edit `.env` and fill in:
+## Setup (HuggingFace Spaces)
 
-| Key | Where to get it | Cost |
-|---|---|---|
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) | ~$0.01-0.05 per run |
-| `TAVILY_API_KEY` | [app.tavily.com](https://app.tavily.com) | Free tier available |
-| `LANGFUSE_SECRET_KEY` | [cloud.langfuse.com](https://cloud.langfuse.com) | Free tier available |
-| `LANGFUSE_PUBLIC_KEY` | [cloud.langfuse.com](https://cloud.langfuse.com) | Free tier available |
+Add these as **Secrets** in your Space settings:
 
-### 5. Verify setup
-```bash
-python test_setup.py
-```
-
-### 6. Run the application
-```bash
-python app.py
-```
-Open your browser at: **http://localhost:7860**
-
----
-
-## Example Input / Output
-
-See `data/sample_input.txt` for a ready-to-use test case.
-See `outputs/sample_result.md` for an example of the generated report.
+| Secret | Where to get it |
+|---|---|
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) |
+| `TAVILY_API_KEY` | [app.tavily.com](https://app.tavily.com) |
+| `LANGFUSE_SECRET_KEY` | [cloud.langfuse.com](https://cloud.langfuse.com) |
+| `LANGFUSE_PUBLIC_KEY` | [cloud.langfuse.com](https://cloud.langfuse.com) |
+| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` |
 
 ---
 
@@ -248,14 +212,13 @@ See `outputs/sample_result.md` for an example of the generated report.
 
 ## Original Project
 
-This project extends the original job-search-assistant built with LangGraph:
+This extends the original job-search-assistant built with LangGraph:
 https://github.com/arahmanmdmajid/job-search-assistant
 
-**Key differences:**
 | Feature | Original (LangGraph) | This Project (CrewAI) |
 |---|---|---|
 | Architecture | Single agent with tool loop | 4 specialist agents |
 | Workflow | Agent decides tool use | Structured sequential tasks |
-| Observability | None | Langfuse full tracing |
+| Observability | None | Langfuse full tracing + Pipeline tab |
 | Fallback | Basic try/except | Retry logic + friendly messages |
 | Output | Chat response | Structured career report |
